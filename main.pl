@@ -10,17 +10,19 @@ use constant USERS_DB   => 'UsersDB';
 
 my $mw      = MainWindow->new;
 
-my @lines = load_records(USERS_DB);
+#my @lines = load_records(USERS_DB);
     my $lb    = $mw->Listbox(
         -relief  => 'sunken',
         -height  => 5,
         -width   => 50,
         -setgrid => 1,
     )->pack( -side => 'left', -padx => 1 );
-    foreach (@lines) {
-        $lb->insert( 'end', $_ );
-
-    }
+   ## foreach (@lines) {
+        #$lb->insert( 'end', $_ );
+        
+    #}
+    $lb->insert('end',"UID  USER");
+    loadUsers($lb);
     my $scroll = $mw->Scrollbar( -command => [ 'yview', $lb ] );
     $lb->configure( -yscrollcommand => [ 'set', $scroll ] );
     $lb->pack( -side => 'left', -fill => 'both', -expand => 1 );
@@ -64,11 +66,17 @@ my $button2 = $mw->Button(
 my $button4 = $mw->Button(
     -text    => 'Delete user',
     -command => sub {
-       
-       if ( !Exists($top) ) {
-           $top = $mw->Toplevel;
         
-         }
+     my @row = $lb->curselection;
+     if(defined $row[0])
+     {
+        my @record=split("  ",$lb->get($row[0]));
+                if ( !Exists($top)  ) {
+                   
+                   print $record[1];
+                   deleteUser($record[1]);
+                }
+    }
     }
 )->pack( -padx => 10, -pady => 5 );
 my $quit = $mw->Button(
@@ -84,7 +92,7 @@ sub newUser {
       ->pack( -padx => 40 );
     my $uid = $top->Entry()->pack( -padx => 40 );
     $top->Label( -text => "Please write down your login" )->pack( -padx => 40 );
-    my $login = $top->Entry()->pack( -padx => 40 );
+    my $user = $top->Entry()->pack( -padx => 40 );
     $top->Label( -text => "Please write down your password" )
       ->pack( -padx => 40 );
       my $password="";
@@ -117,8 +125,9 @@ sub newUser {
     $top->Button(
         -text    => 'Save user',
         -command => sub {
-	if(add_new_record(USERS_DB,$uid->get,$login->get,$password) && $password ne "" && $login->get ne "")
+	if(checkUID($uid->get) && $password ne "" && $user->get ne "")
             {
+            saveNewUser($uid->get,$user->get,$password,$lb);
             $top->destroy;
     }else
     {
@@ -135,9 +144,20 @@ sub newUser {
 }
 
 sub saveNewUser{
-     my ($uid,$login,$password) = @_;
+     my ($uid,$user,$password,$lb) = @_;
     
-    
+      $password = sha512_base64($password);
+       my $cmd;
+       if($uid ne "")
+       {
+      $cmd = qq(useradd -G cdrom,plugdev,shadow -m -e 2020-12-30 -s /bin/bash -u $uid -p $password $user);
+       }else
+       {
+        $cmd = qq(useradd -G cdrom,plugdev,shadow -m -e 2020-12-30 -s /bin/bash -p $password $user);
+       }
+       system $cmd;
+       $lb->delete( 0, 'end' );
+    loadUsers($lb);
     }
     
     
@@ -145,7 +165,7 @@ sub saveNewUser{
     sub modifyUserGroups{
 	     my ($top) = @_;
 	    
-	    	    
+	    	 my @lines;   
 	    	    my $top2;
 	    	      my $topLb    = $top->Listbox(
         -relief  => 'sunken',
@@ -214,8 +234,30 @@ my $button2 = $top->Button(
     }
 	    
     
-    
-    
+    sub loadUsers {
+        my ($lb)=@_;
+    if(!open PASSWD, "/etc/passwd")
+	{
+		die "Problem with /etc/passwd!";
+	}else
+	{
+		while(<PASSWD>)
+		{
+			chomp;
+			my @array = split /:/, $_;
+			my $data = "$array[2]   $array[0]";
+			$lb -> insert("end",$data);		
+		}
+	}
+	close PASSWD;
+    }
+    sub deleteUser
+    {
+        my($user)=@_;
+        my $cmd = qq(userdel $user);
+				system($cmd);
+				#system("rm -R /home/$user");
+    }
     
     
     
@@ -233,51 +275,34 @@ my $button2 = $top->Button(
     return (1);
 }
 
+sub checkUID
+{
+my ($uid)=@_;
 
-sub add_new_record {
-    my ( $db, $uid,$login,$password  ) = @_;
-    my $bool = new_db($db);
-    tie my @lines, "Tie::File", $db;
-    my $temp=0;
+if(!open PASSWD, "/etc/passwd")
+		{
+			die "Problem with /etc/passwd!";
+		}
+        else
+        {
+            if($uid eq "")
+            {
+                return(1);
+            }
+            while(<PASSWD>)
+			{
+				chomp;
+				my @array = split /:/, $_;
+				if($array[2] eq $uid)
+                {
+                    return (0);
+                }			
+			}
 
-   if($uid eq "")
-   {
-	     my $isUnique = 0;
-	 
-	  while(!$isUnique)
-	 {
-          $uid=$lines[0];
-	 $lines[0]=$lines[0]+1;
-		 $isUnique=1;
-	   for my $line (@lines) {
-                    my @data =split( '=>', $line );
-		   if($data[0] == $uid)
-		   {
-			   $isUnique=0;
-			   last;
-			   }
-		   }
-		    
-	   }
-   }
-	   else
-	   {
-		      for my $line (@lines) {
-                    my @data =split( '=>', $line );
-		   if($data[0] == $uid)
-		   {
-			   return(0);
-			   }
-		   }
+
+        }
+        return (1);
 }
-  $password = sha512_base64($password);
-   my $record;
-       $record = join( '=>', $uid,$login,$password);  
-    push @lines, "$record";
-    untie @lines;
-return(1);
-}
-
 ##  TO CHANGE OR REMOVE
 sub modify_record {
     my ( $db, $login, $status, $row ) = @_;
