@@ -7,7 +7,6 @@ use Digest::SHA qw(sha512_base64);
 use Tie::File;
 use Scalar::Util qw( looks_like_number);
 use constant USERS_DB   => 'UsersDB';
-
 my $mw      = MainWindow->new;
 
 #my @lines = load_records(USERS_DB);
@@ -34,9 +33,9 @@ my $button1 = $mw->Button(
     -text    => 'Create New User',
     -command => sub {
        
-       if ( !Exists($top) ) {
+       if ( !Exists($top)) {
            $top = $mw->Toplevel;
-        newUser($top);
+        newUser($top,$lb);
          }
     }
 )->pack( -padx => 10, -pady => 5 );
@@ -68,14 +67,15 @@ my $button4 = $mw->Button(
     -command => sub {
         
      my @row = $lb->curselection;
-     if(defined $row[0])
+     if(defined $row[0] && !Exists($top) )
      {
-        my @record=split("  ",$lb->get($row[0]));
-                if ( !Exists($top)  ) {
-                   
-                   print $record[1];
-                   deleteUser($record[1]);
-                }
+         
+          tie my @lines, "Tie::File","/etc/passwd"or die "failed loadinng passwd";
+        my @record=split(':',$lines[$row[0]-1]);
+                
+                  deleteUser($record[0]);
+                   untie @lines;
+                refreshUsers($lb);
     }
     }
 )->pack( -padx => 10, -pady => 5 );
@@ -86,7 +86,7 @@ my $quit = $mw->Button(
 MainLoop;
 
 sub newUser {
-    my ($top) = @_;
+    my ($top,$lb) = @_;
     $top->Label(
         -text => "Please write down user UID\nor leave empty to generate it" )
       ->pack( -padx => 40 );
@@ -127,8 +127,9 @@ sub newUser {
         -command => sub {
 	if(checkUID($uid->get) && $password ne "" && $user->get ne "")
             {
-            saveNewUser($uid->get,$user->get,$password,$lb);
+            saveNewUser($uid->get,$user->get,$password);
             $top->destroy;
+            refreshUsers($lb);
     }else
     {
            my  $errorMessage = $top->Toplevel;
@@ -144,8 +145,7 @@ sub newUser {
 }
 
 sub saveNewUser{
-     my ($uid,$user,$password,$lb) = @_;
-    
+     my ($uid,$user,$password) = @_;
       $password = sha512_base64($password);
        my $cmd;
        if($uid ne "")
@@ -156,8 +156,6 @@ sub saveNewUser{
         $cmd = qq(useradd -G cdrom,plugdev,shadow -m -e 2020-12-30 -s /bin/bash -p $password $user);
        }
        system $cmd;
-       $lb->delete( 0, 'end' );
-    loadUsers($lb);
     }
     
     
@@ -245,7 +243,7 @@ my $button2 = $top->Button(
 		{
 			chomp;
 			my @array = split /:/, $_;
-			my $data = "$array[2]   $array[0]";
+			my $data = "$array[2]     $array[0]";
 			$lb -> insert("end",$data);		
 		}
 	}
@@ -256,11 +254,18 @@ my $button2 = $top->Button(
         my($user)=@_;
         my $cmd = qq(userdel $user);
 				system($cmd);
-				#system("rm -R /home/$user");
+                system("rm -R /home/$user");
+              
     }
     
     
-    
+    sub refreshUsers
+    {
+        my ($lb)=@_;
+         $lb->delete( 0, 'end' );
+         $lb->insert('end',"UID  USER");
+        loadUsers($lb);
+    }
     
     
     
@@ -303,24 +308,6 @@ if(!open PASSWD, "/etc/passwd")
         }
         return (1);
 }
-##  TO CHANGE OR REMOVE
-sub modify_record {
-    my ( $db, $login, $status, $row ) = @_;
-
-    tie my @lines, "Tie::File", $db;
-    my @record = split( '=>', $lines[$row] );
-    my $record = join( '=>',
-        $record[0], $status, $record[2], $record[3], $record[4], $record[5] );
-    $lines[$row] = $record;
-
-    # my $date = strftime "%d/%m/%Y", localtime;
-    #my $data = join( '=>', $login, $row, $status, $date );
-    untie @lines;
-
-    #add_new_record( CHANGES_DB, $data );
-
-}
-
 sub load_records {
     my ($db) = @_;
 	my @lines=();
