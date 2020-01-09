@@ -1,3 +1,4 @@
+#!/usr/bin/perl 
 package main;
 
 use strict;
@@ -6,20 +7,15 @@ use Tk;
 use Digest::SHA qw(sha512_base64);
 use Tie::File;
 use Scalar::Util qw( looks_like_number);
-use constant USERS_DB   => 'UsersDB';
 my $mw      = MainWindow->new;
 
-#my @lines = load_records(USERS_DB);
     my $lb    = $mw->Listbox(
         -relief  => 'sunken',
         -height  => 5,
         -width   => 50,
         -setgrid => 1,
     )->pack( -side => 'left', -padx => 1 );
-   ## foreach (@lines) {
-        #$lb->insert( 'end', $_ );
-        
-    #}
+
     $lb->insert('end',"UID  USER");
     loadUsers($lb);
     my $scroll = $mw->Scrollbar( -command => [ 'yview', $lb ] );
@@ -42,20 +38,26 @@ my $button1 = $mw->Button(
 my $button2 = $mw->Button(
     -text    => 'Modify user groups',
     -command => sub {
-       
-       if ( !Exists($top) ) {
+     my @row = $lb->curselection;  
+       if (defined $row[0] &&  !Exists($top)) {
            $top = $mw->Toplevel;
-        modifyUserGroups($top);
+           tie my @lines, "Tie::File","/etc/passwd";
+        my @record=split(':',$lines[$row[0]-1]);
+        modifyUserGroups($top,$record[0]);
+        untie @lines;
          }
     }
     )->pack( -padx => 10, -pady => 5 );
   my $button3 = $mw->Button(
     -text    => "Copy file to home catalogue",
     -command => sub {
-       
-    if ( !Exists($top) ) {
+     my @row = $lb->curselection;    
+    if ( defined $row[0] && !Exists($top) ) {
+        tie my @lines, "Tie::File","/etc/passwd";
+        my @record=split(':',$lines[$row[0]-1]);
            $top = $mw->Toplevel;
-        copyFile($top);
+        copyFile($top,$record[0]);
+        untie @lines;
          }
          }
     
@@ -70,7 +72,7 @@ my $button4 = $mw->Button(
      if(defined $row[0] && !Exists($top) )
      {
          
-          tie my @lines, "Tie::File","/etc/passwd"or die "failed loadinng passwd";
+          tie my @lines, "Tie::File","/etc/passwd";
         my @record=split(':',$lines[$row[0]-1]);
                 
                   deleteUser($record[0]);
@@ -161,7 +163,7 @@ sub saveNewUser{
     
     
     sub modifyUserGroups{
-	     my ($top) = @_;
+	     my ($top,$user) = @_;
 	    
 	    	 my @lines;   
 	    	    my $top2;
@@ -171,15 +173,14 @@ sub saveNewUser{
         -width   => 20,
         -setgrid => 1,
     )->pack( -side => 'left', -padx => 1 );
-    foreach (@lines) {
-       $topLb->insert( 'end', $_ );
+    
 
-    }
+    
     my $TopScroll = $top->Scrollbar( -command => [ 'yview', $topLb ] );
    $topLb->configure( -yscrollcommand => [ 'set',$TopScroll] );
     $topLb->pack( -side => 'left', -fill => 'both', -expand => 1 );
    $TopScroll->pack( -side => 'left', -fill => 'y' );
-	    	    
+	    loadGroups($topLb,$user);	    
 	 
 	 my $button1 = $top->Button(
     -text    => 'Add new user group',
@@ -187,7 +188,7 @@ sub saveNewUser{
        
        if ( !Exists($top2) ) {
            $top2 = $top->Toplevel;
-        newUserGroup($top2);
+        addToGroup($top2,$user,$topLb);
          }
     }
 )->pack( -padx => 10, -pady => 5 );   	
@@ -197,37 +198,28 @@ my $button2 = $top->Button(
        
     }
 )->pack( -padx => 10, -pady => 5 );   	   
-	    }
-    
- sub   newUserGroup{
-	     my ($top) = @_;
-	     $top->Label( -text => "Please write down new user group" )->pack( -padx => 40 );
-    my $userGroup = $top->Entry()->pack( -padx => 40 );
-   
-	    
-	  $button1 = $top->Button(
-        -text    => 'Save user group',
-        -command => sub {
-	
-            
-            $top->destroy;
-    
-	    })->pack( -padx => 40, -pady => 5 );
-    }
-    
-    
-    
+	    }    
     sub copyFile{
-	    my ($top) = @_;
+	    my ($top,$user) = @_;
 	    $top->Label( -text => "Please write down file adress to copy file from" )->pack( -padx => 40 );
 	      my $fileToCopy = $top->Entry()->pack( -padx => 40 );
 	    $button1 = $top->Button(
         -text    => 'Apply',
         -command => sub {
-	
-            
+            if($fileToCopy->get ne "" &&  -e $fileToCopy->get)
+            {
+            my $cmd = $fileToCopy->get;
+            system("cp $cmd /home/$user");
             $top->destroy;
-    
+            }else
+            {
+           my  $errorMessage = $top->Toplevel;
+               $errorMessage->Label( -text => "There is no such file" )->pack( -padx => 40 );
+               my $close= $errorMessage->Button(
+    -text    => 'close',
+    -command => sub {$errorMessage->destroy; },
+)->pack( -padx => 40, -pady => 5 );
+            }
 	    })->pack( -padx => 40, -pady => 5 );
     }
 	    
@@ -267,19 +259,6 @@ my $button2 = $top->Button(
         loadUsers($lb);
     }
     
-    
-    
-    sub new_db {
-    my ($db) = @_;
-    if ( not -f $db ) {
-        open my $out, '>', $db or die "Database $db opening failed\n";
-        print  $out 0;
-        close $out;
-        return (0);
-    }
-    return (1);
-}
-
 sub checkUID
 {
 my ($uid)=@_;
@@ -308,16 +287,50 @@ if(!open PASSWD, "/etc/passwd")
         }
         return (1);
 }
-sub load_records {
-    my ($db) = @_;
-	my @lines=();
-    if(not -f $db)
-	{
-	return @lines;
-	}
-    open my $file, '<', $db or die "Database $db opening failed";
-    @lines = <$file>;
-    close $file;
-    chomp @lines;
-    return @lines;
+
+sub loadGroups
+{
+    my ($lb,$user)=@_;
+    my $groups = `groups $user`;
+    my @array =split(':',$groups);
+    @array=split(' ',$array[1]); 
+    foreach (@array)
+   { 
+        $lb -> insert("end",$_);	
+    }
+}
+
+
+sub addToGroup
+{
+
+my ($top,$user,$lb) = @_;
+	    $top->Label( -text => "Please write down group name" )->pack( -padx => 40 );
+	      my $groupEntry = $top->Entry()->pack( -padx => 40 );
+	    $button1 = $top->Button(
+        -text    => 'Apply',
+        -command => sub {
+          my $groupName= $groupEntry->get;
+            if($groupName ne "" )
+            {
+              system "groupadd $groupName";
+            system("usermod -a -G $groupName $user");
+            refreshGroups($lb,$user);
+            $top->destroy;
+            
+            }
+
+            }
+	    )->pack( -padx => 40, -pady => 5 );
+     
+}
+sub deleteFromGroup
+{
+
+}
+sub refreshGroups
+{
+my ($lb,$user)=@_;
+ $lb->delete( 0, 'end' );
+ loadGroups($lb,$user);
 }
