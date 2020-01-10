@@ -7,6 +7,100 @@ use Tk;
 use Digest::SHA qw(sha512_base64);
 use Tie::File;
 use Scalar::Util qw( looks_like_number);
+
+if ($#ARGV>=0 )
+
+{
+my $uid;
+my $user;
+my $password;
+my $group;
+
+
+for (my $i=0; $i <= $#ARGV; $i++) {
+    
+    if($i+1<=$#ARGV && $ARGV[$i] eq "-u")
+    {
+        $user=$ARGV[$i+1];
+        $i++;
+    }
+    elsif($i+1<=$#ARGV && $ARGV[$i] eq "-p")
+    {
+        $password=$ARGV[$i+1];
+        $i++;
+    } elsif($i+1<=$#ARGV && $ARGV[$i] eq "-g")
+    {
+        $group=$ARGV[$i+1];
+        $i++;
+    }
+     elsif($i+1<=$#ARGV && $ARGV[$i] eq "-uid")
+    {
+        $uid=$ARGV[$i+1];
+        $i++;
+    }
+    elsif($ARGV[$i] eq "-userAdd")
+    {
+        if($user ne "")
+        {
+            if($password eq "")
+            {
+                for (my $i=0; $i <= 9; $i++)
+                {
+		        my @generator = ('a'..'z','A'..'Z','0'..'9');
+		
+		        $password =join("",$password,$generator[int rand @generator]);
+		
+		        }    
+            }
+            saveNewUser($uid,$user,$password);
+        }
+    } elsif($ARGV[$i] eq "-userDel" && $user ne "")
+    {
+        deleteUser($user);
+    }elsif($i+1<=$#ARGV && $ARGV[$i] eq "-cp")
+    {
+        my $cmd =$ARGV[$i+1];
+        system("cp $cmd /home/$user");
+        $i++;
+    }elsif($ARGV[$i] eq "-groupAdd" && $user ne "" && $group ne "")
+    {
+                my $cmd = "getent group $group";
+                my $record = `$cmd`;
+                if($record eq "")
+                {
+              system "groupadd $group";
+                }
+            system("usermod -a -G $group $user");
+            
+    }elsif($ARGV[$i] eq "-groupDel" && $user ne "" && $group ne "")
+    {
+    deleteFromGroup($user,$group);
+    }elsif($ARGV[$i] eq "-showGroups")
+    {
+        system("getent group");
+    }elsif($ARGV[$i] eq "-showUsers")
+    {
+        system("getent users");
+    }else
+    {
+        print "All arguments to use :\n
+        -u[USER] : user name\n
+        -p[PASSWORD] : user password\n    
+        -uid[UID] : user uid\n
+        -g[GROUP] : user group\n
+        -cp[FILE ADDRESS] : copy file to user home directory\n
+        -userAdd : add new user(needs -u before) \n
+        -userDel : del user(needs -u before)\n
+        -groupAdd : add user to group(needs -u and -g before)\n
+        -groupDel : delete group(needs -g)\n
+        -showGroups : show groups\n
+        -showUsers : show users\n";
+        last;
+    }
+}
+
+}else
+{
 my $mw      = MainWindow->new;
 
     my $lb    = $mw->Listbox(
@@ -86,7 +180,7 @@ my $quit = $mw->Button(
     -command => sub { exit },
 )->pack( -padx => 10, -pady => 5 );
 MainLoop;
-
+}
 sub newUser {
     my ($top,$lb) = @_;
     $top->Label(
@@ -105,7 +199,7 @@ sub newUser {
     
     
     
-     $button1 = $top->Button(
+   my  $button1 = $top->Button(
         -text    => 'Generate password',
         -command => sub {
 		$password="";
@@ -191,7 +285,7 @@ sub saveNewUser{
 	    loadGroups($topLb,$user);	    
 	 
 	 my $button1 = $top->Button(
-    -text    => 'Add new user group',
+    -text    => 'Add new group',
     -command => sub {
        
        if ( !Exists($top2) ) {
@@ -216,7 +310,7 @@ my $button2 = $top->Button(
 	    my ($top,$user) = @_;
 	    $top->Label( -text => "Please write down file adress to copy file from" )->pack( -padx => 40 );
 	      my $fileToCopy = $top->Entry()->pack( -padx => 40 );
-	    $button1 = $top->Button(
+	  my  $button1 = $top->Button(
         -text    => 'Apply',
         -command => sub {
             if($fileToCopy->get ne "" &&  -e $fileToCopy->get)
@@ -320,7 +414,7 @@ sub addToGroup
 my ($top,$user,$lb) = @_;
 	    $top->Label( -text => "Please write down group name" )->pack( -padx => 40 );
 	      my $groupEntry = $top->Entry()->pack( -padx => 40 );
-	    $button1 = $top->Button(
+	   my $button1 = $top->Button(
         -text    => 'Apply',
         -command => sub {
           my $groupName= $groupEntry->get;
