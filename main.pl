@@ -152,10 +152,18 @@ sub saveNewUser{
        my $cmd;
        if($uid ne "")
        {
-      $cmd = qq(useradd -G cdrom,plugdev,shadow -m -e 2020-12-30 -s /bin/bash -u $uid -p $password $user);
+      $cmd = qq(useradd -G cdrom,plugdev,shadow -m -s /bin/bash -u $uid -p $password $user);
        }else
        {
-        $cmd = qq(useradd -G cdrom,plugdev,shadow -m -e 2020-12-30 -s /bin/bash -p $password $user);
+          my $temp = "getent group $user";
+                my $record = `$temp`;
+                if($record eq "")
+                {
+                    $cmd = qq(useradd -G cdrom,plugdev,shadow -m -s /bin/bash -p $password $user);
+                }else
+                {
+                    $cmd = qq(useradd -g $user -G cdrom,plugdev,shadow -m -s /bin/bash -p $password $user);
+                }
        }
        system $cmd;
     }
@@ -193,9 +201,14 @@ sub saveNewUser{
     }
 )->pack( -padx => 10, -pady => 5 );   	
 my $button2 = $top->Button(
-    -text    => 'Delete group',
+    -text    => 'Delete from group',
     -command => sub {
-       
+        my @row = $topLb->curselection;
+        if(defined $row[0])
+        { 
+       deleteFromGroup($user,$topLb->get($row[0]));
+       refreshGroups($topLb,$user);
+        }
     }
 )->pack( -padx => 10, -pady => 5 );   	   
 	    }    
@@ -313,7 +326,12 @@ my ($top,$user,$lb) = @_;
           my $groupName= $groupEntry->get;
             if($groupName ne "" )
             {
+                my $cmd = "getent group $groupName";
+                my $record = `$cmd`;
+                if($record eq "")
+                {
               system "groupadd $groupName";
+                }
             system("usermod -a -G $groupName $user");
             refreshGroups($lb,$user);
             $top->destroy;
@@ -326,7 +344,15 @@ my ($top,$user,$lb) = @_;
 }
 sub deleteFromGroup
 {
-
+ my ($user,$group)=@_;
+    system("deluser $user $group");
+    my $cmd = "getent group $group";
+    my $record = `$cmd`;
+    my @array = split(":",$record);
+    if($array[0] ne $group && $array[3] eq "\n")
+    {
+        system("groupdel $group");
+    }
 }
 sub refreshGroups
 {
