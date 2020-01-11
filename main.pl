@@ -11,10 +11,10 @@ use Scalar::Util qw( looks_like_number);
 if ($#ARGV>=0 )
 
 {
-my $uid;
-my $user;
-my $password;
-my $group;
+my $uid="";
+my $user="";
+my $password="";
+my $group="";
 
 
 for (my $i=0; $i <= $#ARGV; $i++) {
@@ -77,10 +77,23 @@ for (my $i=0; $i <= $#ARGV; $i++) {
     deleteFromGroup($user,$group);
     }elsif($ARGV[$i] eq "-showGroups")
     {
-        system("getent group");
+        my $result=`getent group`;
+        my @lines=split("\n",$result);
+        foreach (@lines)
+        {
+        my @record=split(":",$_);
+        print "$record[0]\n";
+        }
     }elsif($ARGV[$i] eq "-showUsers")
     {
-        system("getent users");
+
+         my $result=`getent passwd`;
+        my @lines=split("\n",$result);
+        foreach (@lines)
+        {
+        my @record=split(":",$_);
+        print "$record[0]\n";
+        }
     }else
     {
         print "All arguments to use :\n
@@ -88,7 +101,7 @@ for (my $i=0; $i <= $#ARGV; $i++) {
         -p[PASSWORD] : user password\n    
         -uid[UID] : user uid\n
         -g[GROUP] : user group\n
-        -cp[FILE ADDRESS] : copy file to user home directory\n
+        -cp[FILE ADDRESS] : copy file to user home directory(needs -u before)\n
         -userAdd : add new user(needs -u before) \n
         -userDel : del user(needs -u before)\n
         -groupAdd : add user to group(needs -u and -g before)\n
@@ -439,11 +452,15 @@ my ($top,$user,$lb) = @_;
 sub deleteFromGroup
 {
  my ($user,$group)=@_;
+    if($user eq $group) 
+    {
+        return;
+    }
     system("deluser $user $group");
     my $cmd = "getent group $group";
     my $record = `$cmd`;
     my @array = split(":",$record);
-    if($array[0] ne $group && $array[3] eq "\n")
+    if($array[3] eq "\n")
     {
         system("groupdel $group");
     }
