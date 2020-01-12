@@ -89,10 +89,11 @@ for (my $i=0; $i <= $#ARGV; $i++) {
 
          my $result=`getent passwd`;
         my @lines=split("\n",$result);
+	print "UID	Username\n";
         foreach (@lines)
         {
         my @record=split(":",$_);
-        print "$record[0]\n";
+        print "$record[2]	$record[0]\n";
         }
     }else
     {
