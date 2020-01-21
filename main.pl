@@ -4,7 +4,6 @@ package main;
 use strict;
 use warnings;
 use Tk;
-use Digest::SHA qw(sha512_base64);
 use Tie::File;
 use Scalar::Util qw( looks_like_number);
 
@@ -235,9 +234,10 @@ sub newUser {
     $top->Button(
         -text    => 'Save user',
         -command => sub {
-	if(checkUID($uid->get) && $password ne "" && $user->get ne "")
+            print $password;
+	if(checkUID($uid->get) && $passwordEntry->get ne "" && $user->get ne "")
             {
-            saveNewUser($uid->get,$user->get,$password);
+            saveNewUser($uid->get,$user->get,$passwordEntry->get);
             $top->destroy;
             refreshUsers($lb);
     }else
@@ -255,8 +255,14 @@ sub newUser {
 }
 
 sub saveNewUser{
+
      my ($uid,$user,$password) = @_;
-      $password = sha512_base64($password);
+
+     
+       my $data= "login:$user\npassword:$password";
+      
+       
+      $password = crypt($password,&generateSalt());
        my $cmd;
        if($uid ne "")
        {
@@ -274,9 +280,28 @@ sub saveNewUser{
                 }
        }
        system $cmd;
+      if($uid eq "") 
+      {
+       $uid = `id -u $user`;
+        $data=  "uid:$uid$data";
+      }else
+      {
+          $data=  "uid:$uid\n$data";
+      }
+       open (my $fh,">","$user.txt");
+        truncate "$user.txt",0;
+
+        print $fh  $data;
+         close($fh);
     }
     
-    
+    sub generateSalt
+    {
+        my $salt="";
+         my @generator = ('a'..'z','A'..'Z','0'..'9');
+         $salt=join("",$salt,$generator[int rand @generator],$generator[int rand @generator]);
+        return $salt;
+    }
     
     sub modifyUserGroups{
 	     my ($top,$user) = @_;
